@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 
 from airflow import DAG
-# from airflow.utils.dates import days_ago
+from airflow.utils.dates import days_ago
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
@@ -21,14 +21,14 @@ AIRFLOW_HOME = os.environ.get("AIRFLOW_HOME", "/opt/airflow/")
 
 execution_date_f = "{{ execution_date.strftime(\'%Y-%m\') }}"
 
-vehicle_type = "yellow"
-dataset_file = vehicle_type + "_tripdata_" + execution_date_f + ".csv"
-dataset_url = "https://s3.amazonaws.com/nyc-tlc/trip+data/" + dataset_file
+misc_type = "taxi+_zone_lookup"
+dataset_file = misc_type + ".csv"
+dataset_url = "https://s3.amazonaws.com/nyc-tlc/misc/" + dataset_file
 path_to_local_home = os.environ.get("AIRFLOW_HOME", "/opt/airflow/")
 parquet_file = dataset_file.replace('.csv', '.parquet')
 path_to_creds = '~/.google/credentials/'
-trip_table = vehicle_type + "_tripdata_" + execution_date_f
-BIGQUERY_DATASET = os.environ.get("BIGQUERY_DATASET", 'trips_data_all')
+misc_table = "zones"
+BIGQUERY_DATASET = os.environ.get("BIGQUERY_DATASET", misc_table)
 
 
 def format_to_parquet(src_file):
@@ -63,18 +63,17 @@ def upload_to_gcs(bucket, object_name, local_file):
 
 default_args = {
     "owner": "airflow",
-    "start_date": datetime(2019, 1, 1),
-    "end_date": datetime(2021, 1, 1),
-    #"depends_on_past": False,
+    "start_date": days_ago(1),
+    "depends_on_past": False,
     "retries": 1,
 }
 
 # NOTE: DAG declaration - using a Context Manager (an implicit way)
 with DAG(
     dag_id="data_ingestion_gcs_dag",
-    schedule_interval="0 6 2 * *",
+    schedule_interval="@daily",
     default_args=default_args,
-    #catchup=False,
+    catchup=False,
     max_active_runs=1,
     tags=['dtc-de'],
 ) as dag:
@@ -110,7 +109,7 @@ with DAG(
             "tableReference": {
                 "projectId": PROJECT_ID,
                 "datasetId": BIGQUERY_DATASET,
-                "tableId": trip_table,
+                "tableId": misc_table,
             },
             "externalDataConfiguration": {
                 "sourceFormat": "PARQUET",
